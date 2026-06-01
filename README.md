@@ -21,14 +21,51 @@ Real example (verified on our own plan): the panel found a forward dependency in
 
 ## Quick start
 
-### Install (~2 min)
+### Install (1 command, ~30 sec)
 
 ```bash
-# Clone into Claude Code's skills directory
-git clone https://github.com/Redloft/redplan ~/.claude/skills/plan-panel
+curl -fsSL https://raw.githubusercontent.com/Redloft/redplan/main/install.sh | bash
+```
 
-# Copy slash command
+The installer:
+1. Checks deps (`git`, `curl`, `jq`, `node ≥18`, `python3`)
+2. Clones to `~/.claude/skills/plan-panel/`
+3. Copies `/plan-review` slash-command to `~/.claude/commands/`
+4. Runs `doctor.sh` to report optional feature status
+
+Alternative — manual install:
+```bash
+git clone https://github.com/Redloft/redplan ~/.claude/skills/plan-panel
 cp ~/.claude/skills/plan-panel/commands/plan-review.md ~/.claude/commands/
+```
+
+You can also paste this URL in any Claude Code session — Claude will read this README and walk you through install:
+```
+Install this skill: https://github.com/Redloft/redplan
+```
+
+### Diagnose
+
+After install, run doctor anytime:
+```bash
+bash ~/.claude/skills/plan-panel/lib/doctor.sh
+```
+
+It checks: core deps, install integrity, persistence permissions, optional `--ultra` mode setup (env vars or 1Password CLI).
+
+### Update
+
+```bash
+git -C ~/.claude/skills/plan-panel pull
+cp ~/.claude/skills/plan-panel/commands/plan-review.md ~/.claude/commands/
+```
+
+Or just re-run `install.sh` — idempotent.
+
+### Uninstall
+
+```bash
+rm -rf ~/.claude/skills/plan-panel ~/.claude/commands/plan-review.md
 ```
 
 ### Use
@@ -37,6 +74,37 @@ In any Claude Code session:
 
 ```
 /plan-review <your plan as markdown text>
+```
+
+Modes — append flag at end:
+- `--lite` — quick check (3 roles)
+- `--heavy` — judge cross-examines conflicts
+- `--ultra` — adds GPT-5 + Gemini 2.5 Pro cross-verify (requires API keys, see below)
+
+### Optional: enable `--ultra` mode (cross-model verify)
+
+Ultra mode passes plan + Claude's panel review to GPT-5 + Gemini 2.5 Pro independently, then synthesizes 3 perspectives. Useful for critical plans.
+
+**Option A: env vars** (simplest)
+```bash
+export OPENAI_API_KEY="sk-..."
+export GEMINI_API_KEY="AIza..."
+# Add to ~/.zshrc or ~/.bashrc to persist
+```
+
+**Option B: 1Password CLI** (recommended for shared machines)
+
+If you have `op` CLI installed and items named `OpenAI` and `Gemini` in your default vault (with `credential` field) — `lib/cross-model.sh` will auto-wrap calls via `op run`. No env vars needed in shell.
+
+**Optional SOCKS5 proxy** (if Gemini is geo-blocked in your country):
+```bash
+export GEMINI_PROXY="socks5://127.0.0.1:1080"
+```
+
+Verify ultra mode setup:
+```bash
+bash ~/.claude/skills/plan-panel/lib/doctor.sh
+# Look for: "Ultra mode (cross-model verify): ready"
 ```
 
 The skill auto-detects scope (backend / frontend / data / security / ops), picks 3-7 relevant roles, runs them in parallel, and gives you:
