@@ -38,12 +38,35 @@ security, frontend, backend, data, ops (conditional)
   "complexity": "medium",
   "rationale": "План включает API endpoint + миграцию таблицы + handling user credentials. Backend и data — основные; security обязателен из-за credentials.",
   "confidence": 0.9,
+  "recommended_mode": "standard",
+  "mode_reasoning": "Medium complexity с 2 conditional ролями + security-sensitive. Не critical enough для ultra, но больше чем lite.",
+  "needs_user_confirmation": false,
   "verdict": "PASS",
   "findings": [],
   "summary": "Scope определён, panel собран из 7 ролей.",
   "self_check_passed": true
 }
 ```
+
+## Recommended mode rules
+
+Scoper должен порекомендовать оптимальный mode для panel run:
+
+| Условие | recommended_mode | needs_user_confirmation |
+|---|---|---|
+| complexity=low + 1 область + нет security/data | `skip` (предложить пропустить panel вообще) | true |
+| complexity=low + есть security или data риск | `lite` | false |
+| complexity=medium + 0-1 conditional роль | `lite` | false |
+| complexity=medium + 2+ conditional роли | `standard` | false |
+| complexity=high (10+ шагов ИЛИ 3+ областей) | `heavy` | true (~3 мин, нужно подтверждение) |
+| complexity=high + production-changing (migration с rollback risk, breaking API change, auth refactor) | `ultra` | true (нужен outside opinion, +$0.10 API cost) |
+| Security-sensitive (credentials, PII, public endpoint) И complexity != low | минимум `heavy`, рекомендуй `ultra` | true |
+
+**needs_user_confirmation=true** — когда: либо денег/времени стоит (heavy/ultra) либо план тривиальный (skip suggest).
+
+**needs_user_confirmation=false** — auto continue, никакой friction в workflow.
+
+В `mode_reasoning` — одно предложение почему именно этот mode (для transparency пользователю).
 
 ## Activation rules (hardcoded — НЕ ML)
 

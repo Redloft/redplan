@@ -59,7 +59,7 @@ const FINDINGS_SCHEMA = {
 
 const SCOPE_SCHEMA = {
   type: 'object',
-  required: ['scope_tags', 'selected_roles', 'complexity', 'rationale'],
+  required: ['scope_tags', 'selected_roles', 'complexity', 'rationale', 'recommended_mode', 'needs_user_confirmation'],
   additionalProperties: true,
   properties: {
     scope_tags: { type: 'array', items: { type: 'string' } },
@@ -67,6 +67,9 @@ const SCOPE_SCHEMA = {
     complexity: { enum: ['low', 'medium', 'high'] },
     rationale: { type: 'string' },
     confidence: { type: 'number' },
+    recommended_mode: { enum: ['skip', 'lite', 'standard', 'heavy', 'ultra'] },
+    mode_reasoning: { type: 'string' },
+    needs_user_confirmation: { type: 'boolean' },
   },
 }
 
@@ -124,6 +127,13 @@ if (planText === 'NO_PLAN_PROVIDED') {
   log(`⚠️  plan_text not provided in args. typeof args = ${typeof args}`)
 }
 
+// Mode "auto" = scoper решит. Caller (/plan-review) обычно выполняет two-step flow:
+// шаг 1 — этот workflow с mode="auto-scope-only" — возвращает только scoper
+//          + recommended_mode. Caller спрашивает user если needs_user_confirmation.
+// шаг 2 — этот workflow с mode=<выбранный> + precomputed_scoper.
+// В режиме "auto" workflow следует scoper'у без user confirmation (для silent path).
+const isScopeOnly = mode === 'auto-scope-only'
+
 // ============= Phase 1: SCOPE =============
 phase('Scope')
 
@@ -141,6 +151,15 @@ const scoper = await agent(
   `    ops:      scope ⊇ {deploy, infra, ci-cd, production, server} ИЛИ упомянуты VPS/Docker/k8s/cron\n` +
   `- Complexity: low (1-3 шага одной области), medium (4-10 шагов 2-3 области), high (10+ шагов 4+ области ИЛИ security-sensitive ИЛИ data-migration)\n` +
   `- НЕ перестрахуй — лучше включить лишнюю роль чем пропустить нужную; но не выбирай ВСЕ 5 conditional если scope узкий\n\n` +
+  `- recommended_mode rules:\n` +
+  `    low + 1 область, без security/data → 'skip' + needs_user_confirmation=true (план тривиальный)\n` +
+  `    low + security/data риск → 'lite' + needs_user_confirmation=false\n` +
+  `    medium + 0-1 conditional → 'lite' + needs_user_confirmation=false\n` +
+  `    medium + 2+ conditional → 'standard' + needs_user_confirmation=false\n` +
+  `    high (10+ шагов или 3+ областей) → 'heavy' + needs_user_confirmation=true (~3 мин, подтверждение)\n` +
+  `    high + production-changing (DB migration с rollback risk, breaking API, auth refactor) → 'ultra' + needs_user_confirmation=true (+$0.10 API)\n` +
+  `    security-sensitive (credentials/PII/public endpoint) + не low → минимум 'heavy', рекомендуй 'ultra'\n` +
+  `- mode_reasoning: одно предложение объясняющее выбор\n\n` +
   `=== ПЛАН ===\n${planText}\n=== END ===\n\n` +
   `=== PROJECT CONTEXT ===\n${projectSlug !== 'unknown-project' ? 'project_slug: ' + projectSlug : '(no project context)'}\n=== END ===\n\n` +
   `Верни JSON по схеме. selected_roles ДОЛЖЕН включать минимум: scoper, architect, qa, judge.`,
@@ -179,11 +198,33 @@ const selectedRoles = (scoper.selected_roles || [])
 
 log(`Scope: ${scoper.scope_tags.join(', ')} · complexity: ${scoper.complexity}`)
 log(`Selected roles for review: ${selectedRoles.join(', ')}`)
+log(`Recommended mode: ${scoper.recommended_mode} (needs_confirmation=${scoper.needs_user_confirmation})`)
 log(`Rationale: ${scoper.rationale}`)
+
+// Если caller просит только scope phase — возвращаем сейчас (для two-step flow auto-mode)
+if (isScopeOnly) {
+  log('Returning scope-only result для two-step auto-mode flow')
+  return {
+    scope_only: true,
+    scoper,
+    recommended_mode: scoper.recommended_mode,
+    mode_reasoning: scoper.mode_reasoning,
+    needs_user_confirmation: scoper.needs_user_confirmation,
+    selected_roles_for_review: selectedRoles,
+    skipped_roles_not_implemented: skipped,
+  }
+}
+
+// Mode "auto" в full workflow = используем scoper recommendation (без confirmation)
+let effectiveMode = mode
+if (mode === 'auto') {
+  effectiveMode = scoper.recommended_mode === 'skip' ? 'lite' : scoper.recommended_mode
+  log(`Auto mode: resolved to '${effectiveMode}' from scoper recommendation`)
+}
 
 // Lite mode — отбрасываем conditional роли, оставляем только architect+qa
 let reviewRoles = selectedRoles
-if (mode === 'lite') {
+if (effectiveMode === 'lite') {
   reviewRoles = selectedRoles.filter(r => ['architect', 'qa'].includes(r))
   log(`Lite mode: roles cut to ${reviewRoles.join(', ')}`)
 }
@@ -254,7 +295,7 @@ const reviewStatus = reviewRoles.map((role, i) => ({
 // ============= Phase 3: JUDGE =============
 phase('Synthesize')
 
-const heavy = mode === 'heavy' || mode === 'standard'
+const heavy = effectiveMode === 'heavy' || effectiveMode === 'standard'
 const judge = await agent(
   `Ты — judge из skill plan-panel. Прочитай role spec ~/.claude/skills/plan-panel/roles/judge.md.\n\n` +
   `Mode: ${heavy ? 'HEAVY (cross-examination allowed)' : 'lite (no cross-exam)'}\n\n` +
@@ -293,7 +334,7 @@ log(`Conflicts: ${judge.conflicts?.length || 0} · Gaps: ${judge.gaps?.length ||
 let crossModel = null
 let metaJudge = null
 
-if (mode === 'ultra') {
+if (effectiveMode === 'ultra') {
   phase('CrossModel')
   log('Запускаем GPT-5 + Gemini 2.5 Pro для outside opinion...')
 
@@ -403,11 +444,11 @@ const metadata = {
   project_dir: projectDir,
   central_dir: centralDir,
   cwd,
-  selected_roles: ['scoper', ...reviewRoles, 'judge', ...(mode === 'ultra' ? ['meta-judge'] : [])],
+  selected_roles: ['scoper', ...reviewRoles, 'judge', ...(effectiveMode === 'ultra' ? ['meta-judge'] : [])],
   skipped_roles_not_implemented: skipped,
   failed_role_count: failedRoleCount,
   review_status: reviewStatus,
-  cross_model_used: mode === 'ultra',
+  cross_model_used: effectiveMode === 'ultra',
   verdict: metaJudge?.final_verdict || judge.verdict,
   confidence: metaJudge?.confidence || judge.confidence,
 }
@@ -440,8 +481,8 @@ return {
   verdict: metaJudge?.final_verdict || judge.verdict,
   confidence: metaJudge?.confidence || judge.confidence,
   mode,
-  selected_roles: ['scoper', ...reviewRoles, 'judge', ...(mode === 'ultra' ? ['meta-judge'] : [])],
+  selected_roles: ['scoper', ...reviewRoles, 'judge', ...(effectiveMode === 'ultra' ? ['meta-judge'] : [])],
   skipped_roles_not_implemented: skipped,
   failed_role_count: failedRoleCount,
-  cross_model_used: mode === 'ultra',
+  cross_model_used: effectiveMode === 'ultra',
 }
