@@ -2,8 +2,15 @@
 .plan-panel/
 *.history/
 
-# Feedback logs (Phase B — local data, not tracked)
+# Feedback log — PRIVATE, may contain sensitive plan context
+# Never commit even abstract analysis directly — use /panel-share-prompt
+# which generates PR bundle with only role.md diff + abstract metrics
 feedback/*.jsonl
+feedback/_processed/
+
+# Personal evolution / proposed changes
+roles/_history/
+roles/_proposed/
 
 # macOS
 .DS_Store
