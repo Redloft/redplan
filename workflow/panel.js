@@ -132,10 +132,15 @@ const scoper = await agent(
   `=== ROLE SPEC ===\n` +
   `Прочитай файл ~/.claude/skills/plan-panel/roles/scoper.md и следуй ему. ` +
   `Если файл недоступен — следуй этому inline spec:\n` +
-  `- Available roles: scoper(always), architect(always), qa(always), judge(always), security(conditional), frontend, backend, data, ops\n` +
-  `- В Phase A реализованы только: scoper, architect, qa, security, judge. Остальные пока недоступны — НЕ выбирай их.\n` +
-  `- Security активируется если scope включает: backend, auth, data, api, infra, external, ИЛИ упомянуты credentials/tokens/passwords/PII в плане\n` +
-  `- Complexity: low (1-3 шага), medium (4-10), high (10+ или security-sensitive)\n\n` +
+  `- Available roles (ALL implemented в Phase B1): scoper(always), architect(always), qa(always), judge(always), security/frontend/backend/data/ops (conditional)\n` +
+  `- Activation rules:\n` +
+  `    security: scope ⊇ {backend, auth, data, api, infra, external-integration} ИЛИ упомянуты credentials/tokens/passwords/PII\n` +
+  `    frontend: scope ⊇ {frontend, ui, ux, web, mobile} ИЛИ упомянуты React/Next/Vue/Svelte\n` +
+  `    backend:  scope ⊇ {backend, api, server, endpoint} ИЛИ упомянуты Express/FastAPI/Django/server-side код\n` +
+  `    data:     scope ⊇ {data, db, migration, supabase, postgres} ИЛИ упомянуты schema/table/index/migration\n` +
+  `    ops:      scope ⊇ {deploy, infra, ci-cd, production, server} ИЛИ упомянуты VPS/Docker/k8s/cron\n` +
+  `- Complexity: low (1-3 шага одной области), medium (4-10 шагов 2-3 области), high (10+ шагов 4+ области ИЛИ security-sensitive ИЛИ data-migration)\n` +
+  `- НЕ перестрахуй — лучше включить лишнюю роль чем пропустить нужную; но не выбирай ВСЕ 5 conditional если scope узкий\n\n` +
   `=== ПЛАН ===\n${planText}\n=== END ===\n\n` +
   `=== PROJECT CONTEXT ===\n${projectSlug !== 'unknown-project' ? 'project_slug: ' + projectSlug : '(no project context)'}\n=== END ===\n\n` +
   `Верни JSON по схеме. selected_roles ДОЛЖЕН включать минимум: scoper, architect, qa, judge.`,
@@ -147,21 +152,23 @@ if (!scoper) {
   return { error: 'scoper failed', verdict: 'UNCERTAIN', confidence: 0 }
 }
 
-// Fail-fast: если scoper не уверен в скоупе — не тратим Opus call впустую.
-// Found in meta-self-review: panel.js не fail-fast'ил при confidence=0.
-if ((scoper.confidence || 0) < 0.3 || (scoper.selected_roles || []).length < 3) {
-  log(`✋ Fail-fast: scoper confidence=${scoper.confidence}, selected=${scoper.selected_roles?.length || 0}. Aborting без Opus call.`)
+// Fail-fast: если scoper явно не уверен или не выбрал ничего — не тратим Opus call впустую.
+// Confidence default 0.5 если не задана (роль не всегда заполняет это поле).
+const scoperConfidence = typeof scoper.confidence === 'number' ? scoper.confidence : 0.5
+const scoperRoleCount = (scoper.selected_roles || []).length
+if (scoperConfidence < 0.3 || scoperRoleCount < 3) {
+  log(`✋ Fail-fast: scoper confidence=${scoperConfidence}, selected=${scoperRoleCount}. Aborting без Opus call.`)
   return {
     error: 'low-confidence-scope',
     verdict: 'UNCERTAIN',
-    confidence: scoper.confidence,
+    confidence: scoperConfidence,
     scoper,
     user_action_required: 'Уточни план: добавь явные шаги имплементации, DoD, и категории работ (backend/frontend/data/etc). Если это спецификация существующего skill — переформулируй как "implement X" с шагами.',
   }
 }
 
-// Restrict to roles implemented in Phase A
-const ALLOWED = ['scoper', 'architect', 'qa', 'security', 'judge']
+// Roles implemented (Phase A + B1)
+const ALLOWED = ['scoper', 'architect', 'qa', 'security', 'frontend', 'backend', 'data', 'ops', 'judge']
 const skipped = (scoper.selected_roles || []).filter(r => !ALLOWED.includes(r))
 if (skipped.length) {
   log(`⚠️  Phase A roles not yet implemented, skipping: ${skipped.join(', ')} (judge должен это отметить как gap)`)
@@ -184,24 +191,38 @@ if (mode === 'lite') {
 // ============= Phase 2: PARALLEL REVIEW =============
 phase('Review')
 
+// Helper: общий wrapper для prompt — экономит дублирование
+function buildRolePrompt(role, plan, scoperOut, extraInstructions = '') {
+  return (
+    `Ты — ${role} из skill plan-panel. Прочитай role spec ~/.claude/skills/plan-panel/roles/${role}.md и применяй его checklist пунктуально.\n\n` +
+    `=== ПЛАН ===\n${plan}\n=== END ===\n\n` +
+    `=== SCOPE (от scoper) ===\n${JSON.stringify(scoperOut, null, 2)}\n=== END ===\n\n` +
+    `Верни СТРОГО JSON по output schema из _shared.md. Минимум 1 actionable suggestion на finding (иначе verdict не может быть FAIL/NEEDS-WORK).\n` +
+    (extraInstructions ? `\n${extraInstructions}\n` : '')
+  )
+}
+
 const reviewPrompts = {
-  architect: (plan) =>
-    `Ты — architect из skill plan-panel. Прочитай role spec ~/.claude/skills/plan-panel/roles/architect.md и применяй 12-пунктовый checklist.\n\n` +
-    `=== ПЛАН ===\n${plan}\n=== END ===\n\n` +
-    `=== SCOPE (от scoper) ===\n${JSON.stringify(scoper, null, 2)}\n=== END ===\n\n` +
-    `Верни JSON по схеме из _shared.md. Минимум 1 actionable suggestion если есть findings.`,
-  qa: (plan) =>
-    `Ты — qa из skill plan-panel. Прочитай role spec ~/.claude/skills/plan-panel/roles/qa.md и применяй 10-пунктовый checklist.\n\n` +
-    `=== ПЛАН ===\n${plan}\n=== END ===\n\n` +
-    `=== SCOPE ===\n${JSON.stringify(scoper, null, 2)}\n=== END ===\n\n` +
-    `Фокус: acceptance criteria + edge cases + test strategy. НЕ дублируй security findings.\n` +
-    `Верни JSON по схеме.`,
-  security: (plan) =>
-    `Ты — security из skill plan-panel. Прочитай role spec ~/.claude/skills/plan-panel/roles/security.md и применяй OWASP top-10 + secrets hygiene checklist.\n\n` +
-    `=== ПЛАН ===\n${plan}\n=== END ===\n\n` +
-    `=== SCOPE ===\n${JSON.stringify(scoper, null, 2)}\n=== END ===\n\n` +
-    `КРИТИЧНО: если в плане упомянуты credentials/tokens/passwords/keys — проверь соответствие protocol из ~/.claude/skills/secrets/SKILL.md. Любое нарушение = critical.\n` +
-    `Верни JSON по схеме (включая threat_model_summary).`,
+  architect: (plan) => buildRolePrompt('architect', plan, scoper,
+    'Фокус: структура плана, не код. 12 пунктов: декомпозиция, dependencies, missing layers, premature abstraction, reversibility, achievability, contracts, state management. НЕ дублируй security/qa findings.'),
+
+  qa: (plan) => buildRolePrompt('qa', plan, scoper,
+    'Фокус: acceptance criteria + edge cases + test strategy. НЕ дублируй security findings (sql injection = security; empty input validation = qa).'),
+
+  security: (plan) => buildRolePrompt('security', plan, scoper,
+    'КРИТИЧНО: если в плане упомянуты credentials/tokens/passwords/keys — проверь соответствие secrets-protocol (op://vault или env, никогда .env плейн-текст). Любое нарушение = critical. Threat model summary обязательно.'),
+
+  frontend: (plan) => buildRolePrompt('frontend', plan, scoper,
+    'Фокус: UX контракт через призму пользователя. 12 пунктов: states (loading/error/empty), accessibility, perf budgets, responsive, animation, forms, i18n. НЕ предлагай конкретный CSS/JSX — это implementation.'),
+
+  backend: (plan) => buildRolePrompt('backend', plan, scoper,
+    'Фокус: API design + observability + idempotency. НЕ дублируй security (auth = security; contract = backend) и data (schema = data; transactional boundaries = backend).'),
+
+  data: (plan) => buildRolePrompt('data', plan, scoper,
+    'Фокус: data layer — schema, indexes, migrations, RLS, PII. НЕ общий security (SQL injection = security); проверяй RLS policy coverage, migration reversibility, backup story.'),
+
+  ops: (plan) => buildRolePrompt('ops', plan, scoper,
+    'Фокус: deploy + rollback + monitoring + runbook. НЕ выбирай оркестратор (k8s vs systemd) — это implementation. Проверяй rollback safety, alerting signals, capacity, cost.'),
 }
 
 const reviews = await parallel(
