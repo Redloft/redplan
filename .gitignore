@@ -1,0 +1,23 @@
+# Artifacts (kept in user's projects, not in this repo)
+.plan-panel/
+*.history/
+
+# Feedback logs (Phase B — local data, not tracked)
+feedback/*.jsonl
+
+# macOS
+.DS_Store
+
+# Temp
+*.bak
+/tmp/
+*.tmp
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Node (in case anyone runs node helpers locally)
+node_modules/
+*.log
