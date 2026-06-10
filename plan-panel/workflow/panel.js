@@ -25,7 +25,7 @@ const ROLE_DEFINITIONS = {
   architect: { file: '~/.claude/skills/plan-panel/roles/architect.md', model: 'sonnet' },
   qa:        { file: '~/.claude/skills/plan-panel/roles/qa.md',        model: 'sonnet' },
   security:  { file: '~/.claude/skills/plan-panel/roles/security.md',  model: 'sonnet' },
-  judge:     { file: '~/.claude/skills/plan-panel/roles/judge.md',     model: 'opus' },
+  judge:     { file: '~/.claude/skills/plan-panel/roles/judge.md',     model: 'fable' },
   // Phase B: frontend, backend, data, ops
 }
 
@@ -324,7 +324,7 @@ const judge = await agent(
   `- FAIL: ≥2 critical от разных ролей + неразрешимые конфликты\n` +
   `- UNCERTAIN: confidence <0.5\n\n` +
   `Верни JSON по judge schema.`,
-  { label: 'judge', phase: 'Synthesize', model: 'opus', schema: JUDGE_SCHEMA }
+  { label: 'judge', phase: 'Synthesize', model: 'fable', schema: JUDGE_SCHEMA }
 )
 
 if (!judge) {

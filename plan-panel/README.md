@@ -4,7 +4,7 @@ Multi-agent skill для верификации плана / RFC / implementatio
 
 ## Status
 
-- **Phase A (MVP)** — реализовано: scoper (Haiku), architect, qa, security, judge (Opus). Workflow orchestrator. /plan-review команда. Dual persistence.
+- **Phase A (MVP)** — реализовано: scoper (Haiku), architect, qa, security, judge (Fable). Workflow orchestrator. /plan-review команда. Dual persistence.
 - **Phase B (next session)** — TBD: frontend, backend, data, ops роли. Feedback collection + solidify auto-trigger через Stop-hook. TG нотификация о готовом diff для solidify.
 
 ## Quick start
@@ -23,7 +23,7 @@ plan → SCOPE (Haiku scoper) → scope_tags + selected_roles
        PARALLEL REVIEW (Sonnet, выбранные роли)
        каждая роль → JSON по schema из _shared.md
        ↓
-       JUDGE (Opus) → synthesis, conflicts, gaps, priority actions
+       JUDGE (Fable) → synthesis, conflicts, gaps, priority actions
        ↓
        judge.md + полный artifacts в .plan-panel/<ts>-<slug>/
        ↓
@@ -37,7 +37,7 @@ plan → SCOPE (Haiku scoper) → scope_tags + selected_roles
 | `scoper` | Haiku | Always — entry point |
 | `architect` | Sonnet | Always |
 | `qa` | Sonnet | Always |
-| `judge` | Opus | Always (с cross-exam в heavy mode) |
+| `judge` | Fable | Always (с cross-exam в heavy mode) |
 | `security` | Sonnet | Conditional: backend, auth, data, api, infra, external-integration, credentials/tokens/passwords/PII в плане |
 | `frontend` | Sonnet | TBD Phase B — conditional: frontend, ui, ux, web, mobile |
 | `backend` | Sonnet | TBD Phase B — conditional: backend, api, server, endpoint |
@@ -94,7 +94,7 @@ Judge добавляет `priority_actions`, `conflicts`, `gaps`, `final_verdict
 
 - **Sole-author rule** (← aws-samples) — каждая роль владеет одной секцией artifact'а
 - **Spec-driven directory с structured JSON output** — для parseable feedback loop
-- **Model tier routing** (Haiku/Sonnet/Opus) — экономия 5-10x на масштабе
+- **Model tier routing** (Haiku/Sonnet/Fable) — экономия 5-10x на масштабе
 - **Scope-driven activation** — никаких "всегда 50 ролей"; scoper решает, пользователь может override
 - **Protocols-driven, не personality-driven** — каждая роль имеет numbered checklist, не "vibe"
 
@@ -118,7 +118,7 @@ Judge добавляет `priority_actions`, `conflicts`, `gaps`, `final_verdict
 │   ├── architect.md
 │   ├── qa.md
 │   ├── security.md
-│   ├── judge.md            # Opus
+│   ├── judge.md            # Fable
 │   └── _history/           # versioned role prompts after solidify (Phase B)
 ├── workflow/
 │   └── panel.js            # детерминистский orchestrator

@@ -68,7 +68,7 @@ const draft = await agent(
   `=== ЗАДАЧА ===\n${taskText}\n=== END ===\n` +
   `${cwd ? `\ncwd: ${cwd}\n` : ''}` +
   `\nВерни JSON по DRAFT_SCHEMA.`,
-  { label: 'planner:draft', phase: 'Draft', model: 'opus', schema: DRAFT_SCHEMA }
+  { label: 'planner:draft', phase: 'Draft', model: 'fable', schema: DRAFT_SCHEMA }
 )
 
 if (!draft) return { error: 'draft-failed', verdict: 'UNCERTAIN', reason: 'planner не вернул draft' }
@@ -151,7 +151,7 @@ for (let iter = 1; iter <= MAX_ITERS; iter++) {
     `=== ПРЕДЫДУЩИЙ ПЛАН (v${iter}) ===\n${currentPlan}\n=== END ===\n\n` +
     `=== JUDGE (priority actions) ===\n${JSON.stringify(panel.judge?.priority_actions || [], null, 2)}\n=== END ===\n\n` +
     `Верни JSON по DRAFT_SCHEMA + revise_notes.`,
-    { label: `planner:revise-i${iter}`, phase: 'Revise', model: 'opus', schema: DRAFT_SCHEMA }
+    { label: `planner:revise-i${iter}`, phase: 'Revise', model: 'fable', schema: DRAFT_SCHEMA }
   )
 
   if (!revise || !revise.plan_markdown) {

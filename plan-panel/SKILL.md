@@ -14,7 +14,7 @@ description: |
 
   Также активируется когда пользователь явно даёт большой план и просит «прежде чем начнём» / «прежде чем кодить» / «давай разберёмся» — это сигнал что нужна верификация.
 
-  HEAVY MODE по умолчанию (5-8 ролей + Opus judge с cross-examination конфликтов между ролями). Lite — через флаг `--lite`. Cost ~$0.70-2.50 за full run.
+  HEAVY MODE по умолчанию (5-8 ролей + Fable judge с cross-examination конфликтов между ролями). Lite — через флаг `--lite`. Cost ~$0.70-2.50 за full run.
 allowed-tools:
   - Bash
   - Read
@@ -41,7 +41,7 @@ Phase 2: PARALLEL ROLE REVIEW (N agents, Sonnet)
    → каждая выдаёт structured JSON по схеме из _shared.md
    → агрегация в review.md (sole-author rule)
    ↓
-Phase 3: JUDGE SYNTHESIS (1 agent, Opus, HEAVY mode)
+Phase 3: JUDGE SYNTHESIS (1 agent, Fable, HEAVY mode)
    → читает все role outputs
    → ищет конфликты между ролями
    → если есть конфликт — ДЕЛАЕТ cross-examination round: задаёт уточняющий
@@ -82,7 +82,7 @@ Persistence:
    `bash lib/persist.sh "<cwd>" "<task-slug>" from-task` → `<project_dir>|<central_dir>|<ts>`
 2. Запустить reviewer-loop workflow:
    `Workflow({scriptPath: "~/.claude/skills/plan-panel/workflow/reviewer-loop.js", args: {task_text, project_slug, cwd, project_dir, timestamp, mode, max_iters: 2, panel_path: "~/.claude/skills/plan-panel/workflow/panel.js"}})`
-   - Phase 0 Draft (Opus planner, читает код) → петля: panel.js (scope→roles→judge) → revise ×≤2.
+   - Phase 0 Draft (Fable planner, читает код) → петля: panel.js (scope→roles→judge) → revise ×≤2.
    - scope-once: scoper считается на iter 1, переиспользуется (precomputed_scoper) далее.
 3. После завершения — записать версии плана через `lib/persist-plan.sh <project_dir> <N>` (strip + canonical), плюс артефакты финальной панели (review.md/judge.md) как в обычном flow.
 4. Показать пользователю: финальный verdict, сколько кругов, converged?, top-5 действий, путь к `plan.md`.
@@ -105,8 +105,8 @@ Persistence:
 
 ## Modes
 
-- **standard** (default heavy): scoper + architect + qa + judge + relevant conditional roles. Judge с cross-examination. Opus для judge, Sonnet для остальных. ~$0.70-2.50 *if API*, $0 *if Max*.
-- **--lite**: scoper + architect + qa + judge. Без conditional ролей, без cross-exam. Sonnet везде. ~$0.20 *if API*, $0 *if Max*.
+- **standard** (default heavy): scoper + architect + qa + judge + relevant conditional roles. Judge с cross-examination. Fable для judge, Sonnet для остальных. ~$0.70-2.50 *if API*, $0 *if Max*.
+- **--lite**: scoper + architect + qa + judge. Без conditional ролей, без cross-exam. Sonnet роли, Fable judge. ~$0.20 *if API*, $0 *if Max*.
 - **--ultra**: standard + Phase 4 «CrossModel». Финальный план + Claude judge.md прогоняется через **GPT-5 + Gemini 2.5 Pro параллельно** как outside opinion. Meta-judge синтезирует 3 точки зрения. Cross-model часть **всегда платная** (API через 1Password items `OpenAI` + `Gemini`): ~+$0.10-0.20 на real план. Для критических планов где важно «третье мнение».
 
 ## Output to user
