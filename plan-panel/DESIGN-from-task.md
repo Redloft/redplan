@@ -23,14 +23,14 @@ draft → review → (NEEDS-WORK? revise → re-review) ×≤2 → final.
 ```
 - На время пилота `--from-task` требует `--experimental` (или сам спрашивает подтверждение). После pilot-gate — флаг убирается.
 - Дал и задачу, и план → `--from-task` игнорируется (готовый план приоритетнее).
-- `--from-task --ultra` → **pre-run cost/confirmation gate** (gap «cost-confirmation»): показать ожидаемую стоимость (Draft Opus + до 2×(scope+roles+judge) + CrossModel) и спросить подтверждение до запуска.
+- `--from-task --ultra` → **pre-run cost/confirmation gate** (gap «cost-confirmation»): показать ожидаемую стоимость (Draft Fable + до 2×(scope+roles+judge) + CrossModel) и спросить подтверждение до запуска.
 
 ## Flow (loop живёт в `workflow/reviewer-loop.js`, не в panel.js — Stage 0 §3)
 
 ```
 Задача (args.task_text)
    ↓
-Phase 0: DRAFT (1 agent, Opus, roles/planner.md)
+Phase 0: DRAFT (1 agent, Fable, roles/planner.md)
    вход: task_text + project context (project-map) + code context (codegraph/Read)
    выход: DRAFT_SCHEMA (Stage 0 §1.1) → plan.v1.md
    ↓ checkpoint{run_type:'from-task', phase:'draft'}
@@ -45,7 +45,7 @@ Phase 0: DRAFT (1 agent, Opus, roles/planner.md)
 Persistence (plan.v1..vN + canonical plan.md) + user summary
 ```
 
-### Phase 0 — DRAFT (`roles/planner.md`, Opus)
+### Phase 0 — DRAFT (`roles/planner.md`, Fable)
 - **Обязан читать реальный код** (Read, codegraph_*, Bash ro, WebSearch); ставит `code_was_read=true`.
   `false` ⇒ warning в metadata (Stage 0 §4, executable AC).
 - Выход — `DRAFT_SCHEMA`. `plan_markdown` — структура как у ручного плана (шаги что/зачем/риски), без кода.
@@ -96,4 +96,4 @@ reviewer-loop выкатывается `--experimental`. Pilot: **10 реаль�
 | Draft тривиален (1-2 шага) | guard «нужен ли panel?». |
 | Петля осциллирует | MAX_ITERS=2; `regressed`-флаг если critical_count вырос (Stage 0 §4). |
 | `--ultra` + `--from-task` | CrossModel только на **финальной** итерации + cost-gate. |
-| Стоимость | Draft(Opus) + N×(scope+roles+judge); до ~2× обычного. execution_trace даёт фактическую цифру. |
+| Стоимость | Draft(Fable) + N×(scope+roles+judge); до ~2× обычного. execution_trace даёт фактическую цифру. |

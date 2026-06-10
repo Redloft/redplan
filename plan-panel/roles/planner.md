@@ -1,6 +1,6 @@
 # Role: planner
 
-**Model**: Opus
+**Model**: Fable
 **Activation**: только в `--from-task` (Stage 1). Phase 0 (draft) и Phase 0b (revise).
 **Token budget**: 6k input, 4k output
 

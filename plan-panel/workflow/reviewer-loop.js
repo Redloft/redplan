@@ -1,5 +1,5 @@
 // reviewer-loop.js — Stage 1 / Часть A: --from-task + reviewer-loop (DESIGN-from-task).
-// Верхний Workflow-скрипт. Phase 0 Draft (Opus planner) → петля:
+// Верхний Workflow-скрипт. Phase 0 Draft (Fable planner) → петля:
 //   panel.js (через workflow()) → judge verdict → PASS? стоп : revise → next iter.
 // Переиспользует panel.js целиком (не дублирует scope/roles/judge). scope-once
 // через precomputed_scoper на iter>1. Loop отделён от panel.js happy-path (DESIGN-foundation §3).
@@ -15,9 +15,9 @@
 
 export const meta = {
   name: 'reviewer-loop',
-  description: 'from-task: Opus draft плана → reviewer-loop (panel review → revise ×≤2) до PASS или unconverged',
+  description: 'from-task: Fable draft плана → reviewer-loop (panel review → revise ×≤2) до PASS или unconverged',
   phases: [
-    { title: 'Draft', detail: 'Opus planner превращает задачу в план (читает код)' },
+    { title: 'Draft', detail: 'Fable planner превращает задачу в план (читает код)' },
     { title: 'Review', detail: 'panel.js: scope→roles→judge на текущей версии плана' },
     { title: 'Revise', detail: 'planner правит план по judge (если не PASS и остались итерации)' },
   ],

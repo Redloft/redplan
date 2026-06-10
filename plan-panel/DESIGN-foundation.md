@@ -80,7 +80,7 @@ Reviser timeout / parse-fail / schema-violation НЕ роняет run молча
   }
 }
 ```
-Поведение: persist `plan.vN` с `checkpoint.status = revise_failed`, вернуть `converged:false` + reason, **не стартовать** следующую итерацию. Per-phase timeout, retry=0 (не повторяем дорогой Opus-вызов вслепую).
+Поведение: persist `plan.vN` с `checkpoint.status = revise_failed`, вернуть `converged:false` + reason, **не стартовать** следующую итерацию. Per-phase timeout, retry=0 (не повторяем дорогой Fable-вызов вслепую).
 
 ### 1.2b `DRAFT_ERROR_SCHEMA` (v3-warning) — симметрия с REVISE
 Тот же контракт для отказа на Phase 0 draft (timeout/parse-fail/schema-violation) → abort без запуска roles (fail-fast §9). Семейство `*_ERROR_SCHEMA` унифицировано: `{error, phase, iteration?, partial_persisted}`.
@@ -124,7 +124,7 @@ checked_files: { type: 'array', items: { type: 'string' } },  // какие фа
 ### 1.6 `_shared.md` §4 token budget += planner
 | Роль | Input max | Output max | Model |
 |---|---:|---:|---|
-| planner (draft/revise) | 6k | 4k | Opus |
+| planner (draft/revise) | 6k | 4k | Fable |
 | fixer (finalize stabilize) | 8k | 3k | Sonnet |
 
 ---

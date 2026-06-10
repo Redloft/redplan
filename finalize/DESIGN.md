@@ -38,7 +38,7 @@ Phase 1 STABILIZE  (если не --review-only; lockfile §lock)
 Phase 2 SCOPE (Haiku) — по содержимому diff
 Phase 3 PANEL REVIEW (Sonnet, review_mode='code') — роли читают diff, finalize-envelope (Stage 0 §1.3)
    → chunking при большом diff (§chunk)
-Phase 4 JUDGE (Opus) — синтез + cross-exam + gaps + verdict SHIP/FIX-FIRST/NEEDS-WORK
+Phase 4 JUDGE (Fable) — синтез + cross-exam + gaps + verdict SHIP/FIX-FIRST/NEEDS-WORK
    → stable:false ⇒ verdict ≠ SHIP
    ↓
 Persistence + user summary

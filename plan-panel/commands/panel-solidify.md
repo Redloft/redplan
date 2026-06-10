@@ -19,7 +19,7 @@ PAYLOAD=$(bash ~/.claude/skills/plan-panel/lib/solidify.sh prepare "$ROLE" 2>&1)
 
 ### Шаг 2 — Meta-agent analysis
 
-Запусти **Agent tool** (Opus, single call) с prompt:
+Запусти **Agent tool** (Fable, single call) с prompt:
 
 ```
 Ты — meta-agent skill plan-panel в режиме solidify. Твоя задача:
@@ -109,4 +109,4 @@ bash ~/.claude/skills/plan-panel/lib/solidify.sh reject "$ROLE" "$PROPOSED_FILE"
 
 ## Cost
 
-Meta-agent — один Opus call (~10-15k input + 3-5k output) = ~$0.15 if API, $0 if Max. Один раз в 2-3 недели на роль.
+Meta-agent — один Fable call (~10-15k input + 3-5k output) = ~$0.15 if API, $0 if Max. Один раз в 2-3 недели на роль.

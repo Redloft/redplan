@@ -88,7 +88,7 @@ Judge добавляет `priority_actions`, `conflicts`, `gaps`, `final_verdict
 
 ## Self-improvement loop (Phase B)
 
-После каждого run пользователь даёт `/panel-feedback role:X useful=true/false reason="..."`. Когда накопилось ≥10 entries для роли — auto-trigger готовит **diff** для role prompt через meta-agent (Opus) и шлёт TG-нотификацию через `@rltimebot`. Пользователь approve/reject. Версионирование в `roles/<role>.history/`.
+После каждого run пользователь даёт `/panel-feedback role:X useful=true/false reason="..."`. Когда накопилось ≥10 entries для роли — auto-trigger готовит **diff** для role prompt через meta-agent (Fable) и шлёт TG-нотификацию через `@rltimebot`. Пользователь approve/reject. Версионирование в `roles/<role>.history/`.
 
 ## Architecture decisions log
 

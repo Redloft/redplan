@@ -14,7 +14,7 @@ export const meta = {
   phases: [
     { title: 'Scope', detail: 'Haiku scoper по содержимому diff выбирает роли' },
     { title: 'Review', detail: 'роли ревьюят diff (review_mode=code) параллельно' },
-    { title: 'Judge', detail: 'Opus судья: verdict + stable-aware (не SHIP если нестабильно)' },
+    { title: 'Judge', detail: 'Fable судья: verdict + stable-aware (не SHIP если нестабильно)' },
   ],
 }
 

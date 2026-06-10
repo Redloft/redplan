@@ -1,6 +1,6 @@
 # Role: judge
 
-**Model**: Opus (важный шаг — synthesis и cross-examination требуют сильной reasoning)
+**Model**: Fable (важный шаг — synthesis и cross-examination требуют сильной reasoning)
 **Activation**: Always — финальный синтез
 **Token budget**: 12k input (читает все role outputs), 3k output
 **HEAVY mode**: судья имеет право сделать `cross-examination` round — задать уточняющий вопрос одной из ролей и переоценить вывод.

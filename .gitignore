@@ -28,3 +28,5 @@ roles/_proposed/
 # Node (in case anyone runs node helpers locally)
 node_modules/
 *.log
+
+.finalize/

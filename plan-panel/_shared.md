@@ -52,8 +52,8 @@
 |---|---:|---:|---|
 | scoper | 4k | 1k | Haiku |
 | architect / qa / frontend / backend / data / ops / security | 4k | 2k | Sonnet |
-| judge | 12k | 3k | Opus |
-| planner (draft/revise) | 6k | 4k | Opus |
+| judge | 12k | 3k | Fable |
+| planner (draft/revise) | 6k | 4k | Fable |
 | fixer (finalize stabilize) | 8k | 3k | Sonnet |
 
 Если роль явно вышла за бюджет — это сигнал что план слишком большой для одного review (нужно дробить на несколько /plan-review запусков).
@@ -118,7 +118,7 @@ Persistence dual, но **НЕ симметричный**:
 ## 9. Fail-fast guard (orchestrator level)
 
 Workflow обязан остановиться рано если:
-- `scoper.confidence < 0.3` → план не distinguishable от не-плана, возвращаем clarification request пользователю **без Opus call**
+- `scoper.confidence < 0.3` → план не distinguishable от не-плана, возвращаем clarification request пользователю **без Fable call**
 - `selected_roles.length < 3` → недостаточно coverage для panel
 - 2+ роли вернули `null` (timeout/crash) → degraded run, judge получает явный execution_report (см. §7)
 - **planner draft/revise** вернул timeout/parse-fail/schema-violation → `*_ERROR_SCHEMA` (§10), abort без запуска roles (Stage 1)

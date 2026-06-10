@@ -15,7 +15,7 @@ export const meta = {
   phases: [
     { title: 'Scope', detail: 'Haiku scoper выбирает релевантные роли' },
     { title: 'Review', detail: 'параллельный review каждой выбранной ролью' },
-    { title: 'Synthesize', detail: 'Opus judge с cross-examination конфликтов' },
+    { title: 'Synthesize', detail: 'Fable judge с cross-examination конфликтов' },
     { title: 'CrossModel', detail: 'только в --ultra: GPT-5 + Gemini 2.5 Pro как outside opinion + meta-judge синтез' },
   ],
 }
@@ -177,12 +177,12 @@ if (!scoper) {
   return { error: 'scoper failed', verdict: 'UNCERTAIN', confidence: 0 }
 }
 
-// Fail-fast: если scoper явно не уверен или не выбрал ничего — не тратим Opus call впустую.
+// Fail-fast: если scoper явно не уверен или не выбрал ничего — не тратим Fable call впустую.
 // Confidence default 0.5 если не задана (роль не всегда заполняет это поле).
 const scoperConfidence = typeof scoper.confidence === 'number' ? scoper.confidence : 0.5
 const scoperRoleCount = (scoper.selected_roles || []).length
 if (scoperConfidence < 0.3 || scoperRoleCount < 3) {
-  log(`✋ Fail-fast: scoper confidence=${scoperConfidence}, selected=${scoperRoleCount}. Aborting без Opus call.`)
+  log(`✋ Fail-fast: scoper confidence=${scoperConfidence}, selected=${scoperRoleCount}. Aborting без Fable call.`)
   return {
     error: 'low-confidence-scope',
     verdict: 'UNCERTAIN',
