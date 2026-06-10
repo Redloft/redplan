@@ -54,6 +54,9 @@ const FINDINGS_SCHEMA = {
     },
     summary: { type: 'string' },
     self_check_passed: { type: 'boolean' },
+    // DESIGN-foundation §1.5: какие файлы роль реально просмотрела (review_mode=code).
+    // Optional — не ломает существующий plan-review путь.
+    checked_files: { type: 'array', items: { type: 'string' } },
   },
 }
 
@@ -137,7 +140,10 @@ const isScopeOnly = mode === 'auto-scope-only'
 // ============= Phase 1: SCOPE =============
 phase('Scope')
 
-const scoper = await agent(
+// scope-once (DESIGN-foundation §2.3): reviewer-loop передаёт precomputed_scoper на iter>1,
+// чтобы не пересчитывать scoper каждую итерацию. Активируется ТОЛЬКО если передан.
+const precomputedScoper = parsedArgs?.precomputed_scoper || null
+const scoper = precomputedScoper ? (log('Scope: reused precomputed scoper (scope-once)'), precomputedScoper) : await agent(
   `Ты — scoper из skill plan-panel. Прочитай role spec ниже и применяй ПУНКТУАЛЬНО.\n\n` +
   `=== ROLE SPEC ===\n` +
   `Прочитай файл ~/.claude/skills/plan-panel/roles/scoper.md и следуй ему. ` +

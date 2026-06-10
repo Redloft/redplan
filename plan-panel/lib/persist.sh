@@ -53,4 +53,12 @@ mkdir -p "$PROJECT_DIR" "$CENTRAL_DIR"
 # Single source of truth: PROJECT_DIR. CENTRAL — best-effort replica для cross-project аналитики.
 ln -sfn "$PROJECT_DIR" "$CENTRAL_DIR/_project_link" 2>/dev/null || true
 
+# Начальный checkpoint (DESIGN-foundation §2, DoD Stage 0). run_type — 3-й арг, default plan-review.
+# Best-effort: если checkpoint.sh недоступен, persist всё равно успешен (не блокируем).
+RUN_TYPE="${3:-plan-review}"
+CKPT="$(dirname "$0")/checkpoint.sh"
+if [ -f "$CKPT" ]; then
+  bash "$CKPT" init "$PROJECT_DIR" "$RUN_TYPE" "$(bash "$CKPT" slug "$SLUG")" 2>/dev/null || true
+fi
+
 printf '%s|%s|%s\n' "$PROJECT_DIR" "$CENTRAL_DIR" "$TS"

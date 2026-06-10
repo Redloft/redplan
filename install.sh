@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# redplan installer for Claude Code
+# redplan installer for Claude Code — installs the plan-panel + finalize skills.
 #
 # One-liner:
 #   curl -fsSL https://raw.githubusercontent.com/Redloft/redplan/main/install.sh | bash
-#
 # Or after clone:
 #   bash install.sh
 #
-# Installs to ~/.claude/skills/plan-panel/ and copies slash-command to ~/.claude/commands/
+# Installs:
+#   plan-panel → ~/.claude/skills/plan-panel
+#   finalize   → ~/.claude/skills/finalize   (shares plan-panel/lib via relative symlinks)
+#   commands   → ~/.claude/commands/*.md
 # Idempotent — safe to re-run for updates.
 set -euo pipefail
 
 REPO_URL="${REDPLAN_REPO_URL:-https://github.com/Redloft/redplan.git}"
-INSTALL_DIR="${REDPLAN_INSTALL_DIR:-$HOME/.claude/skills/plan-panel}"
+SKILLS_DIR="${REDPLAN_SKILLS_DIR:-$HOME/.claude/skills}"
 COMMANDS_DIR="${REDPLAN_COMMANDS_DIR:-$HOME/.claude/commands}"
 
 bold()  { printf '\033[1m%s\033[0m\n' "$*"; }
@@ -20,74 +22,66 @@ green() { printf '\033[32m%s\033[0m\n' "$*"; }
 yellow(){ printf '\033[33m%s\033[0m\n' "$*"; }
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 
-bold "🌶  redplan installer"
+bold "🌶  redplan installer (plan-panel + finalize)"
 echo
 
 # ─── 1. Required deps ───
 echo "Checking required deps..."
 MISSING=()
 for cmd in git curl jq node python3; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    MISSING+=("$cmd")
-  fi
+  command -v "$cmd" >/dev/null 2>&1 || MISSING+=("$cmd")
 done
 if [ ${#MISSING[@]} -gt 0 ]; then
   red "✗ Missing required deps: ${MISSING[*]}"
-  echo
-  echo "Install on macOS:"
-  echo "  brew install git curl jq node python"
-  echo "Install on Ubuntu/Debian:"
-  echo "  sudo apt-get install git curl jq nodejs python3"
+  echo "  macOS:  brew install git curl jq node python"
+  echo "  Debian: sudo apt-get install git curl jq nodejs python3"
   exit 1
 fi
 green "✓ All required deps present"
-
 NODE_VER=$(node --version | sed 's/v//;s/\..*//')
-if [ "$NODE_VER" -lt 18 ]; then
-  yellow "⚠ Node version is v$NODE_VER. Skill tested on Node ≥18."
+[ "$NODE_VER" -lt 18 ] && yellow "⚠ Node v$NODE_VER — skill tested on Node ≥18."
+
+# ─── 2. Locate source (local clone or fetch to a temp dir) ───
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLEANUP=""
+if [ ! -d "$SRC/plan-panel" ] || [ ! -d "$SRC/finalize" ]; then
+  echo "Fetching redplan source..."
+  SRC="$(mktemp -d)"; CLEANUP="$SRC"
+  git clone --quiet --depth 1 "$REPO_URL" "$SRC"
 fi
 
-# ─── 2. Install skill files ───
+# ─── 3. Install both skills (preserve finalize's relative symlinks → plan-panel/lib) ───
 echo
-echo "Installing to $INSTALL_DIR..."
-if [ -d "$INSTALL_DIR/.git" ]; then
-  yellow "→ Existing install found. Updating via git pull..."
-  git -C "$INSTALL_DIR" pull --quiet --ff-only origin main 2>&1 | sed 's/^/  /'
-  green "✓ Updated to latest"
-else
-  if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
-    red "✗ $INSTALL_DIR exists and is not empty (not a git repo)."
-    echo "  Backup or remove it, then re-run."
-    exit 1
-  fi
-  mkdir -p "$(dirname "$INSTALL_DIR")"
-  git clone --quiet "$REPO_URL" "$INSTALL_DIR"
-  green "✓ Cloned to $INSTALL_DIR"
-fi
+echo "Installing skills to $SKILLS_DIR ..."
+mkdir -p "$SKILLS_DIR"
+for skill in plan-panel finalize; do
+  dest="$SKILLS_DIR/$skill"
+  [ -d "$dest" ] && { yellow "→ replacing existing $skill"; rm -rf "$dest"; }
+  cp -R "$SRC/$skill" "$dest"          # cp -R preserves symlinks
+  green "✓ $skill → $dest"
+done
+# verify the shared-lib symlinks resolve
+for f in checkpoint.sh strip-secrets.sh; do
+  [ -e "$SKILLS_DIR/finalize/lib/$f" ] || red "⚠ finalize/lib/$f does not resolve — is plan-panel installed?"
+done
 
-# ─── 3. Copy slash-command ───
+# ─── 4. Slash-commands ───
 echo
-echo "Installing slash-command to $COMMANDS_DIR..."
+echo "Installing slash-commands to $COMMANDS_DIR ..."
 mkdir -p "$COMMANDS_DIR"
-cp "$INSTALL_DIR/commands/plan-review.md" "$COMMANDS_DIR/plan-review.md"
-green "✓ /plan-review installed"
+cp "$SKILLS_DIR/plan-panel/commands/"*.md "$COMMANDS_DIR/" 2>/dev/null || true
+green "✓ commands installed: $(ls "$SKILLS_DIR/plan-panel/commands" | sed 's/\.md//' | tr '\n' ' ')"
 
-# ─── 4. Run doctor for optional features ───
+# ─── 5. Optional features ───
 echo
 bold "─── Optional features ───"
-bash "$INSTALL_DIR/lib/doctor.sh" || true
+bash "$SKILLS_DIR/plan-panel/lib/doctor.sh" 2>/dev/null || true
 
-# ─── 5. Done ───
+[ -n "$CLEANUP" ] && rm -rf "$CLEANUP"
+
 echo
 bold "🎯 Installation complete"
-echo
-echo "Usage:"
-echo "  In any Claude Code session:"
-echo "    /plan-review <your plan as text>"
-echo
-echo "Documentation:"
-echo "  Local:  $INSTALL_DIR/README.md"
-echo "  Online: https://github.com/Redloft/redplan"
-echo
-echo "Troubleshooting:"
-echo "  bash $INSTALL_DIR/lib/doctor.sh"
+echo "Usage in any Claude Code session:"
+echo "  /plan-review <plan text>      — multi-role plan verification"
+echo "  /finalize                     — stabilize + code-review the working diff"
+echo "Docs: https://github.com/Redloft/redplan"

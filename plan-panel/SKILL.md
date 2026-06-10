@@ -10,6 +10,7 @@ description: |
   • «прогони ревью», «нужна команда экспертов», «нужно мнение архитектора + qa + ...»
   • "review this plan", "verify this plan", "panel review", "expert review"
   • Explicit: «/plan-review», «/plan-panel», «/panel»
+  • --from-task (Stage 1): «спланируй и проверь X», «сделай план под задачу X и прогони панель», "plan and verify X", "draft a plan for X and review it" — когда ПЛАНА ЕЩЁ НЕТ, есть только задача.
 
   Также активируется когда пользователь явно даёт большой план и просит «прежде чем начнём» / «прежде чем кодить» / «давай разберёмся» — это сигнал что нужна верификация.
 
@@ -49,7 +50,7 @@ Phase 3: JUDGE SYNTHESIS (1 agent, Opus, HEAVY mode)
    → final verdict: PASS / FAIL / NEEDS-WORK
    ↓
 Persistence:
-   project/.plan-panel/<ts>-<slug>/  + копия в $PLAN_PANEL_CENTRAL/<project>/<ts>/
+   project/.plan-panel/<ts>-<slug>/  + копия в $CLAUDECORE_PATH/plan-panel/<project>/<ts>/
    plan.md, scope.json, review.md, judge.md, metadata.json
    ↓
 Финал: показ judge.md пользователю + опциональный prompt на /panel-feedback
@@ -69,22 +70,38 @@ Persistence:
 
 1. Понять что план — это либо текущее сообщение пользователя, либо последний значимый план в session (если он сказал «проверь то что мы только что обсудили»)
 2. Сохранить план в `<persistence_dir>/plan.md` (по схеме ниже)
-3. Запустить `Workflow({scriptPath: "~/.claude/skills/plan-panel/workflow/panel.js", args: {plan_path, project_slug, mode}})`
+3. Запустить `Workflow({scriptPath: "~/.claude/skills/plan-panel/workflow/panel.js", args: {plan_text, project_slug, mode}})`
+   ⚠️ Workflow-песочница **без ФС-доступа** — передавай **содержимое плана инлайн** в `plan_text`, а не путь. Если план уже на диске (`plan.md`) — сначала `Read` его, затем подставь текст в `plan_text`. (panel.js читает `args.plan_text`, поля `plan_path` нет.)
 4. После завершения — показать пользователю summary из judge.md + предложить /panel-feedback
+
+## Запуск `--from-task` (Stage 1: задача без плана)
+
+Когда пользователь даёт **задачу, а не план** (триггеры выше / явный `--from-task`):
+
+1. Setup persistence с `run_type=from-task`:
+   `bash lib/persist.sh "<cwd>" "<task-slug>" from-task` → `<project_dir>|<central_dir>|<ts>`
+2. Запустить reviewer-loop workflow:
+   `Workflow({scriptPath: "~/.claude/skills/plan-panel/workflow/reviewer-loop.js", args: {task_text, project_slug, cwd, project_dir, timestamp, mode, max_iters: 2, panel_path: "~/.claude/skills/plan-panel/workflow/panel.js"}})`
+   - Phase 0 Draft (Opus planner, читает код) → петля: panel.js (scope→roles→judge) → revise ×≤2.
+   - scope-once: scoper считается на iter 1, переиспользуется (precomputed_scoper) далее.
+3. После завершения — записать версии плана через `lib/persist-plan.sh <project_dir> <N>` (strip + canonical), плюс артефакты финальной панели (review.md/judge.md) как в обычном flow.
+4. Показать пользователю: финальный verdict, сколько кругов, converged?, top-5 действий, путь к `plan.md`.
+
+**Edge-cases** (обрабатывает reviewer-loop):
+- задача расплывчата → `clarification:true` + `open_questions[]` → показать пользователю, НЕ гонять петлю;
+- `code_was_read=false` → warning (план не заземлён на код);
+- не сошлось за MAX_ITERS → `converged:false` + reason; oscillation (critical вырос) → ранний break.
+
+Флаги: `--lite`/`--ultra` управляют глубиной review-фаз (как обычно); cost-gate для `--from-task --ultra`.
 
 ## Persistence dirs (hybrid)
 
-**Project-local** (canonical source of truth): `<cwd>/.plan-panel/<YYYY-MM-DD_HH-MM>-<plan-slug>/`
-**Central mirror** (best-effort replica): `$PLAN_PANEL_CENTRAL/<project-slug>/<YYYY-MM-DD_HH-MM>-<plan-slug>/`
+**Project-local**: `<cwd>/.plan-panel/<YYYY-MM-DD_HH-MM>-<plan-slug>/`
+**Central mirror**: `$CLAUDECORE_PATH/plan-panel/<project-slug>/<YYYY-MM-DD_HH-MM>-<plan-slug>/`
 
-Central root resolution (lib/persist.sh):
-1. `$PLAN_PANEL_CENTRAL` env (если задана) — рекомендуется для пользователей
-2. `$CLAUDECORE_PATH/plan-panel/` (если задана) — для legacy ClaudeCore setup
-3. Default: `~/.plan-panel-central/`
+`<project-slug>` определяется через `project-map` skill (`$CLAUDECORE_PATH/projects/<slug>.md` if cwd matches a known project) или fallback на basename cwd.
 
-`<project-slug>` определяется как `basename($PWD)` sanitized. Опционально: если у тебя есть skill для project mapping (например ClaudeCore project-map) — можешь pre-resolve project slug и передать через `args.project_slug`.
-
-Создаются обе папки + symlink central→project (best-effort — если cloud-sync filesystem не поддерживает symlinks, не блокирует workflow).
+Создаются обе папки + symlink: central → project (чтобы редактирование одного отражалось в обоих).
 
 ## Modes
 
@@ -129,5 +146,5 @@ Central root resolution (lib/persist.sh):
 | Scoper выбрал роль не из Phase A (frontend/backend/data/ops) | Workflow её ПРОПУСКАЕТ + передаёт judge как `skipped_not_implemented`. Judge ОБЯЗАН отметить как gap. |
 | Cross-model partial failure (GPT работает, Gemini падает) | `cross-model.sh` пишет error в `errors[]`, остальной JSON содержит то что есть. Meta-judge синтезирует из 2 источников вместо 3, отмечает degraded в summary. |
 | Concurrent /plan-review | Каждый run создаёт unique `<ts>-<slug>` dir. Коллизия в 1 секунду крайне маловероятна. **Lock-файл для serialization** — Phase B (когда добавится /panel-feedback который правит artifacts). |
-| cloud-synced filesystem symlink сломался | persist.sh пытается ln, но `\|\| true` — non-fatal. Local PROJECT_DIR остаётся canonical. Central mirror можно перегенерировать через `cp -r project_dir/* central_dir/`. |
+| Yandex.Disk symlink сломался | persist.sh пытается ln, но `\|\| true` — non-fatal. Local PROJECT_DIR остаётся canonical. Central mirror можно перегенерировать через `cp -r project_dir/* central_dir/`. |
 | Plan слишком большой (>20k chars) | Token budget per role exceeded. Roles вернут UNCERTAIN. Judge поднимет gap. **Решение**: разбить план на несколько /plan-review запусков по logical sections. |
