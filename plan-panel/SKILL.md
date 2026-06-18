@@ -91,7 +91,7 @@ Persistence:
 - задача расплывчата → `clarification:true` + `open_questions[]` → показать пользователю, НЕ гонять петлю;
 - `code_was_read=false` → warning (план не заземлён на код);
 - не сошлось за MAX_ITERS → `converged:false` + reason; oscillation (critical вырос) → ранний break;
-- `ceiling:true` + `next_action:'finalize'` → confidence вышла на плато при NEEDS-WORK, остаток — implementation-DoD. **Не предлагать новый круг — направить на `/finalize`** (см. ниже).
+- `ceiling:true` + `next_action:'finalize'` → confidence вышла на плато при NEEDS-WORK, остаток — implementation-DoD. **Не предлагать новый круг — направить на `/finalize`** (см. ниже). Срабатывает **только на NEEDS-WORK** (FAIL/UNCERTAIN петля доводит до MAX_ITERS как раньше) и требует **≥2 итераций** (на iter 1 `prevConfidence=null` → guard fail-open).
 
 Флаги: `--lite`/`--ultra` управляют глубиной review-фаз (как обычно); cost-gate для `--from-task --ultra`.
 

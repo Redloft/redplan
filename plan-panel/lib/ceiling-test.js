@@ -48,8 +48,15 @@ ok(hit(0.85, null, 'NEEDS-WORK') === false, 'no-ceiling: cur=null (панель 
 // 6. Обвал confidence при не-PASS → тоже потолок (новые круги не помогут).
 ok(hit(0.90, 0.60, 'NEEDS-WORK') === true, 'ceiling: 0.90→0.60 обвал (Δ<0) — больше кругов не спасут')
 
-// 7. FAIL/UNCERTAIN на плато — тоже не-PASS → потолок (любой не-PASS).
-ok(hit(0.85, 0.85, 'FAIL') === true, 'ceiling: FAIL на плато = не-PASS → потолок')
+// 7. FAIL/UNCERTAIN на плато — НЕ потолок: ceiling только для NEEDS-WORK.
+//    FAIL = нерешённые архитектурные critical; UNCERTAIN = мало контекста → доработка плана, не /finalize.
+ok(hit(0.85, 0.85, 'FAIL') === false, 'no-ceiling: FAIL = архитектурные critical, не implementation-DoD')
+ok(hit(0.45, 0.45, 'UNCERTAIN') === false, 'no-ceiling: UNCERTAIN = мало контекста, нужна доработка плана')
+
+// 8. Float-precision (IEEE754): номинальный Δ=0.03 НЕ должен считаться плато ни при какой паре.
+//    Без eps-1e-9 кейс 0.80→0.83 ложно срабатывал (0.0299999…916 < 0.03).
+ok(hit(0.80, 0.83, 'NEEDS-WORK') === false, 'no-ceiling: Δ=0.03 (0.80→0.83 float-noisy) — eps-1e-9 держит границу')
+ok(hit(0.70, 0.73, 'NEEDS-WORK') === false, 'no-ceiling: Δ=0.03 (0.70→0.73) float-safe')
 
 if (fail) { console.error(`\n✗ ceiling-test: ${fail} провал(ов)`); process.exit(1) }
-console.log(`✓ ceiling self-test passed (10 кейсов, EPS=${EPS} из исходника)`)
+console.log(`✓ ceiling self-test passed (13 кейсов, EPS=${EPS} из исходника)`)

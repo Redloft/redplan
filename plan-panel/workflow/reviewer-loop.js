@@ -10,7 +10,7 @@
 //   mode          — 'standard'(default)|'lite'|'ultra' (для review-фаз)
 //   max_iters     — default 2
 //
-// Возвращает: { converged, iterations[], plan_versions[], final_plan, final_judge, verdict, reason, clarification? }
+// Возвращает: { converged, ceiling, next_action?, reason, verdict, final_confidence, iterations[], plan_versions[], final_plan, final_judge, clarification? }
 // Артефакты (plan.vN через strip + checkpoint) пишет caller — workflow-скрипты не имеют FS access.
 
 export const meta = {
@@ -113,10 +113,14 @@ const secCritUp = (judge, prev) => {
   return prev != null && sec(judge) > prev
 }
 // Ceiling predicate (вынесен именованной функцией → ceiling-test.js извлекает её из исходника
-// без drift). true = confidence на плато при не-PASS: прирост ниже eps. null-guard на оба conf.
+// без drift). ИНВАРИАНТ: single-expression, без вложенных блоков (extract-regex ловит тело до '}'
+// в колонке 0). Срабатывает ТОЛЬКО на NEEDS-WORK — НЕ на FAIL (нерешённые архитектурные critical,
+// не DoD) и НЕ на UNCERTAIN (мало контекста → нужна доработка плана, а не code-review). Плато =
+// прирост ниже eps; `eps - 1e-9` — float-safe строгое сравнение (прирост ровно eps не считается
+// плато и при IEEE754-шуме типа 0.80→0.83). null-guard на оба conf.
 function ceilingReached(prevConf, curConf, verdict, eps) {
-  return prevConf != null && curConf != null && verdict !== 'PASS'
-    && (curConf - prevConf) < eps
+  return prevConf != null && curConf != null && verdict === 'NEEDS-WORK'
+    && (curConf - prevConf) < eps - 1e-9
 }
 
 for (let iter = 1; iter <= MAX_ITERS; iter++) {
