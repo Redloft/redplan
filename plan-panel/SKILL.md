@@ -85,12 +85,13 @@ Persistence:
    - Phase 0 Draft (Fable planner, читает код) → петля: panel.js (scope→roles→judge) → revise ×≤2.
    - scope-once: scoper считается на iter 1, переиспользуется (precomputed_scoper) далее.
 3. После завершения — записать версии плана через `lib/persist-plan.sh <project_dir> <N>` (strip + canonical), плюс артефакты финальной панели (review.md/judge.md) как в обычном flow.
-4. Показать пользователю: финальный verdict, сколько кругов, converged?, top-5 действий, путь к `plan.md`.
+4. Показать пользователю: финальный verdict, сколько кругов, converged?/`ceiling`?, top-5 действий, путь к `plan.md`. Если `next_action:'finalize'` — закрыть петлю фразой «архитектура подтверждена, остаток — DoD кодинга → дальше `/finalize` по diff», без предложения ещё круга.
 
 **Edge-cases** (обрабатывает reviewer-loop):
 - задача расплывчата → `clarification:true` + `open_questions[]` → показать пользователю, НЕ гонять петлю;
 - `code_was_read=false` → warning (план не заземлён на код);
-- не сошлось за MAX_ITERS → `converged:false` + reason; oscillation (critical вырос) → ранний break.
+- не сошлось за MAX_ITERS → `converged:false` + reason; oscillation (critical вырос) → ранний break;
+- `ceiling:true` + `next_action:'finalize'` → confidence вышла на плато при NEEDS-WORK, остаток — implementation-DoD. **Не предлагать новый круг — направить на `/finalize`** (см. ниже).
 
 Флаги: `--lite`/`--ultra` управляют глубиной review-фаз (как обычно); cost-gate для `--from-task --ultra`.
 
@@ -118,10 +119,12 @@ Persistence:
 - Gap count (что ни одна роль не покрыла)
 - Кнопка: «дай feedback по ролям» → `/panel-feedback`
 
+**Ceiling-handoff** (verdict=NEEDS-WORK): если `final_verdict_reasoning` судьи говорит, что остаток critical — implementation-уровня (архитектурных не осталось), это **потолок панели** (PASS запрещает любой critical, а детальный план всегда вскрывает implementation-critical из текста — см. `roles/judge.md` §Ceiling). Не предлагать ещё круг plan-review — сказать пользователю: «замысел подтверждён, priority_actions = DoD-чеклист для кодинга; верификация реализации → `/finalize` (code-review по diff)».
+
 ## Не забывать
 
 - **Не запускать на тривиальных планах** (1-2 шага, без сложности). Scoper должен возвращать `complexity: 'low'` → можно skip с предложением "план тривиальный, нужен ли panel?".
-- **Не двойной запуск**: если в этой же сессии уже был /plan-review на тот же план — спросить пользователя re-run или показать предыдущий результат.
+- **Не двойной запуск**: если в этой же сессии уже был /plan-review на тот же план — спросить пользователя re-run или показать предыдущий результат. Если прошлый прогон вернул NEEDS-WORK с implementation-уровня остатком (ceiling) — **по умолчанию НЕ перезапускать**, а направить на `/finalize`: новый круг не сойдётся к PASS, только сожжёт токены (2-3 раунда достаточно — потолок ~0.85).
 - **Версионирование plan.md**: если план эволюционировал — каждый run создаёт новую папку timestamp'a, старые не перезаписываются.
 
 ## Acceptance criteria (Done-when) для каждой фазы

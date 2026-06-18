@@ -17,6 +17,7 @@ run "crash-canary"    bash "$HERE/crash-canary-test.sh"
 run "persist-plan"    bash "$HERE/persist-plan.sh" --self-test
 run "panel.js syntax" node --check "$HERE/../workflow/panel.js"
 run "reviewer-loop syntax" node --check "$HERE/../workflow/reviewer-loop.js"
+run "ceiling-guard"   node "$HERE/ceiling-test.js"
 run "golden fixtures" bash "$HERE/run-golden.sh"
 
 echo
