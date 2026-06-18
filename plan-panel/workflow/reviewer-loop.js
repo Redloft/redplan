@@ -96,12 +96,27 @@ let scopeCache = null
 let converged = false
 let finalPanel = null
 let prevCritical = null
+let prevConfidence = null
+let ceiling = false
 let reason = ''
+
+// Ceiling guard (redplan-review-ceiling): прирост confidence ниже этого порога при
+// NEEDS-WORK = плато. PASS запрещает ЛЮБОЙ critical, а достаточно детальный план всегда
+// вскрывает implementation-critical, которые панель не проверит из текста → асимптота к
+// ~0.85, не к PASS. Дальнейшие круги жгут токены без шанса сойтись. Верификация
+// реализации — задача /finalize (code-review по diff), не plan-review.
+const CEILING_EPS = 0.03
 
 const critCount = (judge) => (judge?.findings || []).filter(f => f.severity === 'critical').length
 const secCritUp = (judge, prev) => {
   const sec = (j) => (j?.findings || []).filter(f => f.severity === 'critical' && /sec|secret|auth|credential|token/i.test((f.area || '') + (f.issue || ''))).length
   return prev != null && sec(judge) > prev
+}
+// Ceiling predicate (вынесен именованной функцией → ceiling-test.js извлекает её из исходника
+// без drift). true = confidence на плато при не-PASS: прирост ниже eps. null-guard на оба conf.
+function ceilingReached(prevConf, curConf, verdict, eps) {
+  return prevConf != null && curConf != null && verdict !== 'PASS'
+    && (curConf - prevConf) < eps
 }
 
 for (let iter = 1; iter <= MAX_ITERS; iter++) {
@@ -124,9 +139,11 @@ for (let iter = 1; iter <= MAX_ITERS; iter++) {
 
   const verdict = panel.verdict
   const curCritical = critCount(panel.judge)
-  iterations.push({ iter, verdict, critical: curCritical, judge_summary: panel.judge?.summary })
+  const curConfidence = typeof panel.confidence === 'number' ? panel.confidence
+    : (typeof panel.judge?.confidence === 'number' ? panel.judge.confidence : null)
+  iterations.push({ iter, verdict, critical: curCritical, confidence: curConfidence, judge_summary: panel.judge?.summary })
   finalPanel = panel
-  log(`iter ${iter}: verdict=${verdict} · critical=${curCritical}`)
+  log(`iter ${iter}: verdict=${verdict} · critical=${curCritical} · confidence=${curConfidence ?? 'n/a'}`)
 
   if (verdict === 'PASS') { converged = true; reason = `PASS на iter ${iter}`; break }
 
@@ -137,7 +154,19 @@ for (let iter = 1; iter <= MAX_ITERS; iter++) {
     log(`✋ ${reason}`)
     break
   }
+
+  // Ceiling guard (redplan-review-ceiling): confidence вышла на плато при NEEDS-WORK и
+  // critical не растёт (рост уже отсёк oscillation выше). Остаток — implementation-DoD,
+  // которые панель не закроет из текста → новый круг не сойдётся. Стоп + handoff на /finalize.
+  if (ceilingReached(prevConfidence, curConfidence, verdict, CEILING_EPS)) {
+    ceiling = true
+    reason = `ceiling на iter ${iter}: confidence плато (${prevConfidence}→${curConfidence}, Δ<${CEILING_EPS}), critical=${curCritical} не закрывается из текста плана. Остаток — implementation-DoD → верификация через /finalize, не новый круг plan-review.`
+    log(`✋ ${reason}`)
+    break
+  }
+
   prevCritical = curCritical
+  prevConfidence = curConfidence
 
   if (iter === MAX_ITERS) { reason = `достигнут MAX_ITERS=${MAX_ITERS} без PASS`; break }
 
@@ -165,8 +194,12 @@ for (let iter = 1; iter <= MAX_ITERS; iter++) {
 
 return {
   converged,
+  ceiling,
+  next_action: ceiling ? 'finalize' : undefined,
   reason,
   verdict: finalPanel?.verdict || 'UNCERTAIN',
+  final_confidence: typeof finalPanel?.confidence === 'number' ? finalPanel.confidence
+    : (typeof finalPanel?.judge?.confidence === 'number' ? finalPanel.judge.confidence : null),
   iterations,
   plan_versions: planVersions,
   final_plan: currentPlan,
